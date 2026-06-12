@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	pxapi "github.com/Telmate/proxmox-api-go/proxmox"
 	"github.com/google/uuid"
@@ -90,6 +91,29 @@ func (b *proxmoxBackend) tokenRenew(ctx context.Context, req *logical.Request, d
 		return nil, errors.New("error retrieving role: role is nil")
 	}
 
+	// Extending the Vault lease alone is not enough: the underlying Proxmox token
+	// carries its own absolute expiry set at creation time, so without pushing the
+	// new expiry to Proxmox the token would stop working mid-lease. Keep them in sync.
+	if roleEntry.TTL > 0 {
+		tokenID := ""
+		if tokenIDRaw, ok := req.Secret.InternalData["token_id"]; ok {
+			tokenID, ok = tokenIDRaw.(string)
+			if !ok {
+				return nil, fmt.Errorf("invalid value for token in secret internal data")
+			}
+		}
+
+		client, err := b.getClient(ctx, req.Storage)
+		if err != nil {
+			return nil, fmt.Errorf("error getting client: %w", err)
+		}
+
+		expire := time.Now().Add(roleEntry.TTL).Unix()
+		if err := updateTokenExpire(client, roleEntry.User, roleEntry.Realm, tokenID, expire, roleEntry.PrivilegeSeparation); err != nil {
+			return nil, fmt.Errorf("error updating token expiry on renew: %w", err)
+		}
+	}
+
 	resp := &logical.Response{Secret: req.Secret}
 
 	if roleEntry.TTL > 0 {
@@ -130,6 +154,45 @@ func createToken(ctx context.Context, c *proxmoxClient, user string, realm strin
 		TokenID: tokenId,
 		Secret:  secret,
 	}, nil
+}
+
+// grantTokenACL grants the given Proxmox roles to a privilege-separated API token
+// at the given object path via PUT /access/acl. The token is identified by its full
+// id (user@realm!tokenid). When the token is later deleted Proxmox removes the
+// matching ACL entries automatically, so revocation needs no explicit cleanup.
+func grantTokenACL(c *proxmoxClient, tokenIDFull string, path string, roles []string, propagate bool) error {
+	if path == "" {
+		return errors.New("error granting token ACL: no path provided")
+	}
+	if len(roles) == 0 {
+		return errors.New("error granting token ACL: no roles provided")
+	}
+
+	propagateValue := 0
+	if propagate {
+		propagateValue = 1
+	}
+
+	params := map[string]interface{}{
+		"path":      path,
+		"roles":     strings.Join(roles, ","),
+		"tokens":    tokenIDFull,
+		"propagate": propagateValue,
+	}
+
+	return c.Put(params, "/access/acl")
+}
+
+// updateTokenExpire pushes a new absolute expiry to an existing Proxmox API token.
+// privsep must reflect the token's current privilege-separation setting, because the
+// underlying Proxmox update always sends privsep and would otherwise reset it.
+func updateTokenExpire(c *proxmoxClient, user string, realm string, tokenID string, expire int64, privsep bool) error {
+	u, err := pxapi.NewConfigUserFromApi(pxapi.UserID{Name: user, Realm: realm}, c.Client)
+	if err != nil {
+		return err
+	}
+
+	return u.UpdateApiToken(c.Client, pxapi.ApiToken{TokenId: tokenID, Comment: "Managed by Vault", Expire: expire, Privsep: privsep})
 }
 
 func deleteToken(ctx context.Context, c *proxmoxClient, user string, realm string, tokenID string) error {

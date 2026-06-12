@@ -16,7 +16,10 @@ type proxmoxRoleEntry struct {
 	TTL    time.Duration `json:"ttl"`
 	MaxTTL time.Duration `json:"max_ttl"`
 
-	//SeparatedPrivileges bool          `json:"separated_privileges"`
+	PrivilegeSeparation bool     `json:"privilege_separation"`
+	ACLPath             string   `json:"acl_path"`
+	ACLRoles            []string `json:"acl_roles"`
+	ACLPropagate        bool     `json:"acl_propagate"`
 }
 
 func (r *proxmoxRoleEntry) toResponseData() map[string]interface{} {
@@ -27,7 +30,10 @@ func (r *proxmoxRoleEntry) toResponseData() map[string]interface{} {
 		"ttl":     r.TTL.Seconds(),
 		"max_ttl": r.MaxTTL.Seconds(),
 
-		//"separated_privileges": r.SeparatedPrivileges,
+		"privilege_separation": r.PrivilegeSeparation,
+		"acl_path":             r.ACLPath,
+		"acl_roles":            r.ACLRoles,
+		"acl_propagate":        r.ACLPropagate,
 	}
 	return respData
 }
@@ -60,6 +66,24 @@ func pathRole(b *proxmoxBackend) []*framework.Path {
 					Type:        framework.TypeDurationSecond,
 					Description: "Maximum time for role. If not set or set to 0, will use system default.",
 				},
+				"privilege_separation": {
+					Type:        framework.TypeBool,
+					Description: "If true, generated tokens use Proxmox privilege separation (privsep=1) and receive only the privileges granted via acl_path/acl_roles, instead of inheriting all of the user's privileges. Defaults to false for backwards compatibility.",
+					Default:     false,
+				},
+				"acl_path": {
+					Type:        framework.TypeString,
+					Description: "Proxmox ACL object path the generated token is granted access to (e.g. /vms/100 or /). Required when privilege_separation is true.",
+				},
+				"acl_roles": {
+					Type:        framework.TypeCommaStringSlice,
+					Description: "Comma-separated list of Proxmox roles (e.g. PVEVMAdmin) granted to the generated token at acl_path. Required when privilege_separation is true.",
+				},
+				"acl_propagate": {
+					Type:        framework.TypeBool,
+					Description: "Whether the ACL granted to the generated token propagates to child paths. Only used when privilege_separation is true.",
+					Default:     true,
+				},
 			},
 			Operations: map[logical.Operation]framework.OperationHandler{
 				logical.ReadOperation: &framework.PathOperation{
@@ -75,6 +99,7 @@ func pathRole(b *proxmoxBackend) []*framework.Path {
 					Callback: b.pathRolesDelete,
 				},
 			},
+			ExistenceCheck:  b.pathRoleExistenceCheck,
 			HelpSynopsis:    pathRoleHelpSynopsis,
 			HelpDescription: pathRoleHelpDescription,
 		},
@@ -89,6 +114,15 @@ func pathRole(b *proxmoxBackend) []*framework.Path {
 			HelpDescription: pathRoleListHelpDescription,
 		},
 	}
+}
+
+func (b *proxmoxBackend) pathRoleExistenceCheck(ctx context.Context, req *logical.Request, d *framework.FieldData) (bool, error) {
+	entry, err := b.getRole(ctx, req.Storage, d.Get("name").(string))
+	if err != nil {
+		return false, err
+	}
+
+	return entry != nil, nil
 }
 
 func (b *proxmoxBackend) getRole(ctx context.Context, s logical.Storage, name string) (*proxmoxRoleEntry, error) {
@@ -195,6 +229,30 @@ func (b *proxmoxBackend) pathRolesWrite(ctx context.Context, req *logical.Reques
 
 	if roleEntry.MaxTTL != 0 && roleEntry.TTL > roleEntry.MaxTTL {
 		return logical.ErrorResponse("ttl cannot be greater than max_ttl"), nil
+	}
+
+	if privsepRaw, ok := d.GetOk("privilege_separation"); ok {
+		roleEntry.PrivilegeSeparation = privsepRaw.(bool)
+	} else if createOperation {
+		roleEntry.PrivilegeSeparation = d.Get("privilege_separation").(bool)
+	}
+
+	if pathRaw, ok := d.GetOk("acl_path"); ok {
+		roleEntry.ACLPath = pathRaw.(string)
+	}
+
+	if rolesRaw, ok := d.GetOk("acl_roles"); ok {
+		roleEntry.ACLRoles = rolesRaw.([]string)
+	}
+
+	if propagateRaw, ok := d.GetOk("acl_propagate"); ok {
+		roleEntry.ACLPropagate = propagateRaw.(bool)
+	} else if createOperation {
+		roleEntry.ACLPropagate = d.Get("acl_propagate").(bool)
+	}
+
+	if roleEntry.PrivilegeSeparation && (roleEntry.ACLPath == "" || len(roleEntry.ACLRoles) == 0) {
+		return logical.ErrorResponse("acl_path and acl_roles are required when privilege_separation is true (a privilege-separated token with no ACL grant has no privileges)"), nil
 	}
 
 	if err := setRole(ctx, req.Storage, name.(string), roleEntry); err != nil {
