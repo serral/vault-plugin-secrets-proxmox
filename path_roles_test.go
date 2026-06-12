@@ -89,6 +89,68 @@ func TestUserRole(t *testing.T) {
 	})
 }
 
+func TestPrivilegeSeparationRole(t *testing.T) {
+	b, s := getTestBackend(t)
+
+	t.Run("privsep without acl is rejected", func(t *testing.T) {
+		resp, err := testTokenRoleCreate(t, b, s, "privsep-no-acl", map[string]interface{}{
+			"user":                 user,
+			"realm":                realm,
+			"privilege_separation": true,
+		})
+
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		require.True(t, resp.IsError())
+	})
+
+	t.Run("privsep with acl is stored", func(t *testing.T) {
+		resp, err := testTokenRoleCreate(t, b, s, "privsep-ok", map[string]interface{}{
+			"user":                 user,
+			"realm":                realm,
+			"privilege_separation": true,
+			"acl_path":             "/vms/100",
+			"acl_roles":            "PVEVMAdmin,PVEVMUser",
+		})
+
+		require.NoError(t, err)
+		require.Nil(t, resp)
+	})
+
+	t.Run("privsep role reads back", func(t *testing.T) {
+		resp, err := b.HandleRequest(context.Background(), &logical.Request{
+			Operation: logical.ReadOperation,
+			Path:      "role/privsep-ok",
+			Storage:   s,
+		})
+
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		require.Equal(t, true, resp.Data["privilege_separation"])
+		require.Equal(t, "/vms/100", resp.Data["acl_path"])
+		require.Equal(t, []string{"PVEVMAdmin", "PVEVMUser"}, resp.Data["acl_roles"])
+		// acl_propagate defaults to true when omitted
+		require.Equal(t, true, resp.Data["acl_propagate"])
+	})
+
+	t.Run("default role is not privilege separated", func(t *testing.T) {
+		_, err := testTokenRoleCreate(t, b, s, "no-privsep", map[string]interface{}{
+			"user":  user,
+			"realm": realm,
+		})
+		require.NoError(t, err)
+
+		resp, err := b.HandleRequest(context.Background(), &logical.Request{
+			Operation: logical.ReadOperation,
+			Path:      "role/no-privsep",
+			Storage:   s,
+		})
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		require.Equal(t, false, resp.Data["privilege_separation"])
+	})
+}
+
 // Utility function to create a role while, returning any response (including errors)
 func testTokenRoleCreate(t *testing.T, b *proxmoxBackend, s logical.Storage, name string, d map[string]interface{}) (*logical.Response, error) {
 	t.Helper()

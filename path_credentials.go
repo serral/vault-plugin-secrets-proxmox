@@ -42,16 +42,26 @@ func (b *proxmoxBackend) createToken(ctx context.Context, s logical.Storage, rol
 		expire = time.Now().Add(role.TTL).Unix()
 	}
 
-	// TODO: separated privileges always false for now, should support setting what privileges to use before exposing?
-	privsep := false
-
-	token, err = createToken(ctx, client, role.User, role.Realm, expire, privsep)
+	token, err = createToken(ctx, client, role.User, role.Realm, expire, role.PrivilegeSeparation)
 	if err != nil {
 		return nil, fmt.Errorf("error creating Proxmox API token for role '%v': %w", role.Name, err)
 	}
 
 	if token == nil {
 		return nil, errors.New("error creating Proxmox API token")
+	}
+
+	// With privilege separation the freshly created token has no privileges until
+	// it is granted an ACL. Grant the configured roles at the configured path and
+	// roll back the token if the grant fails, so we never hand out a useless token.
+	if role.PrivilegeSeparation {
+		tokenIDFull := fmt.Sprintf("%s@%s!%s", role.User, role.Realm, token.TokenID)
+		if err := grantTokenACL(client, tokenIDFull, role.ACLPath, role.ACLRoles, role.ACLPropagate); err != nil {
+			if delErr := deleteToken(ctx, client, role.User, role.Realm, token.TokenID); delErr != nil {
+				return nil, fmt.Errorf("error granting ACL to token for role '%v': %w (additionally, rollback failed to delete the token: %v)", role.Name, err, delErr)
+			}
+			return nil, fmt.Errorf("error granting ACL to token for role '%v': %w", role.Name, err)
+		}
 	}
 
 	return token, nil

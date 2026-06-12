@@ -1,0 +1,16 @@
+# .gitleaks.toml — secret scanning config for vault-plugin-secrets-proxmox.
+# Single Go module; default rules plus an allowlist for known test placeholders.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Dummy credentials used in tests and docs — not real secrets"
+regexes = [
+  # path_config_test.go: token_secret = "111-222-333"
+  '''111-222-333''',
+]
+paths = [
+  '''(^|/)go\.sum$''',
+  '''(^|/)vendor/''',
+]

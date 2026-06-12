@@ -1,0 +1,53 @@
+# .pre-commit-config.yaml — hooks for vault-plugin-secrets-proxmox (Go module).
+# Install: pre-commit install
+# Run manually: pre-commit run --all-files
+
+fail_fast: false
+minimum_pre_commit_version: '2.13.0'
+
+repos:
+  # Secret detection (primary)
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.1
+    hooks:
+      - id: gitleaks
+        name: Detect secrets with GitLeaks
+        entry: gitleaks detect --config .gitleaks.toml --verbose --no-git
+        language: golang
+        pass_filenames: false
+        always_run: true
+
+  # Go toolchain hooks
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      - id: go-fmt
+      - id: go-vet-mod
+      - id: go-mod-tidy
+      - id: golangci-lint-mod
+
+  # Standard hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: detect-private-key
+      - id: check-merge-conflict
+
+  # Markdown linting (README.md)
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: v0.37.0
+    hooks:
+      - id: markdownlint
+        files: '\.md$'
+        args: ['--fix']
+
+exclude: |
+  (?x)^(
+    \.git/.*|
+    vendor/.*
+  )$

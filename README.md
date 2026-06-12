@@ -3,7 +3,7 @@
 This is a standalone backend plugin for use with [Hashicorp Vault](https://www.github.com/hashicorp/vault).
 This plugin provides handling of Proxmox VE API tokens by Vault.
 
-This plugin is a bit "first pass" and can not yet create tokens with privileges separate from the user account it belongs to (pull requests welcome :sparkles:).
+By default minted tokens inherit all privileges of the user account they belong to. Tokens can optionally be created with Proxmox privilege separation (`privsep`), in which case they only receive the roles you grant them via an ACL on the role definition. See [Privilege separation](#privilege-separation) below.
 
 ## Getting Started
 
@@ -17,7 +17,7 @@ To learn specifically about how plugins work, see documentation on [Vault plugin
 
 ## Installation
 
-Currently no built release is distributed, you'll have to build from source for your chosen OS and architecture.
+Currently no built release is distributed, you'll have to build from source for your chosen OS and architecture. Building requires Go 1.25 or newer (see `go.mod`).
 
 1. Clone this repository and change directory into the root.
 2. For good measure, run some tests: `go test -v`.
@@ -27,8 +27,8 @@ Currently no built release is distributed, you'll have to build from source for 
 
 ## Setup (Proxmox)
 
-1. Access your Proxmox VE cluster and under **Permissions** / **API Tokens** create a new API token that you will setup the Vault secrets engine with.
-2. If you want the role(s), and subsequent minted API tokens, to impersonate a user other than you (probably a good idea) create those accounts under **Permissions** / **Users** (eg `ci` or `packer` or I don't know..). The minted tokens will inherit **all** permissions of the user their role is created for, until we've added support for separate per-token privileges.
+1. Access your Proxmox VE cluster and under **Permissions** / **API Tokens** create a new API token that you will setup the Vault secrets engine with. This token needs the privileges to create and delete API tokens for the relevant users and, if you intend to use [privilege separation](#privilege-separation), to modify ACLs. Rather than handing it full administrator rights, scope it to what it needs (for example `User.Modify` to manage the users' tokens and `Permissions.Modify` to grant ACLs, on the relevant `/access/...` paths). Privilege separation on this configuring token itself is recommended.
+2. If you want the role(s), and subsequent minted API tokens, to impersonate a user other than you (probably a good idea) create those accounts under **Permissions** / **Users** (eg `ci` or `packer` or I don't know..). Without privilege separation the minted tokens inherit **all** permissions of the user their role is created for; with privilege separation they only receive the roles granted via the role's ACL settings.
 
 ## Setup (Vault)
 
@@ -57,6 +57,37 @@ vault read proxmox/creds/alice
 ```sh
 vault lease revoke proxmox/creds/alice/<lease id>
 ```
+
+## Privilege separation
+
+By default a role creates Proxmox tokens that inherit every privilege of their user. To instead mint tokens that only hold a specific set of roles, enable privilege separation on the Vault role and tell it which Proxmox roles to grant and where:
+
+```sh
+vault write proxmox/role/alice \
+  user="alice" \
+  realm="pve" \
+  privilege_separation=true \
+  acl_path="/vms/100" \
+  acl_roles="PVEVMAdmin" \
+  acl_propagate=true
+```
+
+When `privilege_separation=true` the plugin creates the token with `privsep=1` and then grants `acl_roles` at `acl_path` (via `PUT /access/acl`). Because a privilege-separated token has no privileges until an ACL is attached, `acl_path` and `acl_roles` are required whenever `privilege_separation` is true. If the ACL grant fails the plugin deletes the half-provisioned token so you never receive a token with no access.
+
+Role ACL fields:
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `privilege_separation` | no | `false` | Create tokens with `privsep=1` and ACL-scoped privileges instead of inheriting the user's privileges. |
+| `acl_path` | when privsep | - | Proxmox ACL object path the token is granted access to (e.g. `/vms/100`, `/`). |
+| `acl_roles` | when privsep | - | Comma-separated Proxmox roles granted at `acl_path` (e.g. `PVEVMAdmin,PVEVMUser`). |
+| `acl_propagate` | no | `true` | Whether the granted ACL propagates to child paths. |
+
+When a token is revoked, Proxmox automatically removes the ACL entries that referenced it, so no extra cleanup is needed.
+
+## Lease renewal
+
+Renewing a credential's lease in Vault also pushes the new expiry to the underlying Proxmox token, keeping the two in sync so the token does not expire on the Proxmox side while Vault still considers the lease valid.
 
 ## Contribute
 

@@ -1,0 +1,36 @@
+# golangci-lint v2 config for vault-plugin-secrets-proxmox.
+# Run: golangci-lint run
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose    # HTTP response bodies must be closed (Proxmox API client)
+    - gosec        # security checks - relevant for a secrets engine
+    - misspell
+    - revive
+    - unconvert
+    - unparam
+  settings:
+    gosec:
+      excludes:
+        - G101 # false positives on "token"/"secret" field and var names
+    revive:
+      rules:
+        - name: exported
+          disabled: true # plugin paths don't need doc comments on every symbol
+  exclusions:
+    rules:
+      # Test files: relax error checking and security rules on fixtures.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
