@@ -39,7 +39,7 @@ func TestConfig(t *testing.T) {
 	b, reqStorage := getTestBackend(t)
 
 	t.Run("Test Configuration", func(t *testing.T) {
-		err := testConfigCreate(t, b, reqStorage, map[string]interface{}{
+		err := testConfigCreate(b, reqStorage, map[string]interface{}{
 			"user":         user,
 			"realm":        realm,
 			"token_id":     token_id,
@@ -50,7 +50,7 @@ func TestConfig(t *testing.T) {
 
 		assert.NoError(t, err)
 
-		err = testConfigRead(t, b, reqStorage, map[string]interface{}{
+		err = testConfigRead(b, reqStorage, map[string]interface{}{
 			"user":                     user,
 			"realm":                    realm,
 			"token_id":                 token_id,
@@ -63,14 +63,14 @@ func TestConfig(t *testing.T) {
 
 		assert.NoError(t, err)
 
-		err = testConfigUpdate(t, b, reqStorage, map[string]interface{}{
+		err = testConfigUpdate(b, reqStorage, map[string]interface{}{
 			"user":     "bob",
 			"token_id": "some_changed_token_703468470",
 		})
 
 		assert.NoError(t, err)
 
-		err = testConfigRead(t, b, reqStorage, map[string]interface{}{
+		err = testConfigRead(b, reqStorage, map[string]interface{}{
 			"user":                     "bob",
 			"realm":                    realm,
 			"token_id":                 "some_changed_token_703468470",
@@ -83,13 +83,13 @@ func TestConfig(t *testing.T) {
 
 		assert.NoError(t, err)
 
-		err = testConfigDelete(t, b, reqStorage)
+		err = testConfigDelete(b, reqStorage)
 
 		assert.NoError(t, err)
 	})
 }
 
-func testConfigDelete(t *testing.T, b logical.Backend, s logical.Storage) error {
+func testConfigDelete(b logical.Backend, s logical.Storage) error {
 	resp, err := b.HandleRequest(context.Background(), &logical.Request{
 		Operation: logical.DeleteOperation,
 		Path:      configStoragePath,
@@ -106,7 +106,7 @@ func testConfigDelete(t *testing.T, b logical.Backend, s logical.Storage) error 
 	return nil
 }
 
-func testConfigCreate(t *testing.T, b logical.Backend, s logical.Storage, d map[string]interface{}) error {
+func testConfigCreate(b logical.Backend, s logical.Storage, d map[string]interface{}) error {
 	resp, err := b.HandleRequest(context.Background(), &logical.Request{
 		Operation: logical.CreateOperation,
 		Path:      configStoragePath,
@@ -124,7 +124,7 @@ func testConfigCreate(t *testing.T, b logical.Backend, s logical.Storage, d map[
 	return nil
 }
 
-func testConfigUpdate(t *testing.T, b logical.Backend, s logical.Storage, d map[string]interface{}) error {
+func testConfigUpdate(b logical.Backend, s logical.Storage, d map[string]interface{}) error {
 	resp, err := b.HandleRequest(context.Background(), &logical.Request{
 		Operation: logical.UpdateOperation,
 		Path:      configStoragePath,
@@ -142,7 +142,7 @@ func testConfigUpdate(t *testing.T, b logical.Backend, s logical.Storage, d map[
 	return nil
 }
 
-func testConfigRead(t *testing.T, b logical.Backend, s logical.Storage, expected map[string]interface{}) error {
+func testConfigRead(b logical.Backend, s logical.Storage, expected map[string]interface{}) error {
 	resp, err := b.HandleRequest(context.Background(), &logical.Request{
 		Operation: logical.ReadOperation,
 		Path:      configStoragePath,
