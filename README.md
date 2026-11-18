@@ -3,6 +3,8 @@
 This is a standalone backend plugin for use with [Hashicorp Vault](https://www.github.com/hashicorp/vault).
 This plugin provides handling of Proxmox VE API tokens by Vault.
 
+> This project is an independent fork of [mollstam/vault-plugin-secrets-proxmox](https://github.com/mollstam/vault-plugin-secrets-proxmox). It diverged after upstream commit `a97df68`. Credit for the original plugin goes to Tobias Mollstam. This fork is maintained separately and does not send changes upstream. It is released under the [Unlicense](LICENSE) (public domain), like the original.
+
 By default minted tokens inherit all privileges of the user account they belong to. Tokens can optionally be created with Proxmox privilege separation (`privsep`), in which case they only receive the roles you grant them via an ACL on the role definition. See [Privilege separation](#privilege-separation) below.
 
 ## Getting Started
