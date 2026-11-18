@@ -1,4 +1,4 @@
-module github.com/mollstam/vault-plugin-secrets-proxmox
+module github.com/serral/vault-plugin-secrets-proxmox
 
 go 1.25.7
 
