@@ -19,7 +19,31 @@ To learn specifically about how plugins work, see documentation on [Vault plugin
 
 ## Installation
 
-Currently no built release is distributed, you'll have to build from source for your chosen OS and architecture. Building requires Go 1.25 or newer (see `go.mod`).
+### Option 1: download a release (Linux x86-64 only)
+
+Each [release](https://github.com/serral/vault-plugin-secrets-proxmox/releases) has two files: the plugin binary and a `SHA256SUMS` file. The binary is a plain executable, not an archive. Releases are built for Linux on x86-64 only. For any other operating system or CPU, use option 2.
+
+1. Download the binary and its checksum file, then verify them:
+```sh
+VERSION=v1.2.0
+BASE=https://github.com/serral/vault-plugin-secrets-proxmox/releases/download/${VERSION}
+curl -fsSLO ${BASE}/vault-plugin-secrets-proxmox_Linux_x86_64
+curl -fsSLO ${BASE}/vault-plugin-secrets-proxmox_${VERSION}_SHA256SUMS
+sha256sum -c vault-plugin-secrets-proxmox_${VERSION}_SHA256SUMS
+chmod +x vault-plugin-secrets-proxmox_Linux_x86_64
+```
+2. Move the binary into your Vault `plugin_directory` and register it with its SHA256 hash. See the [Vault plugin docs](https://developer.hashicorp.com/vault/docs/plugins/plugin-architecture#plugin-registration) for more information.
+```sh
+mv vault-plugin-secrets-proxmox_Linux_x86_64 /path/to/vault/plugin_directory/
+vault plugin register \
+  -sha256="$(cut -d' ' -f1 vault-plugin-secrets-proxmox_${VERSION}_SHA256SUMS)" \
+  -command=vault-plugin-secrets-proxmox_Linux_x86_64 \
+  secret vault-plugin-secrets-proxmox
+```
+
+### Option 2: build from source
+
+Building requires Go 1.25 or newer (see `go.mod`).
 
 1. Clone this repository and change directory into the root.
 2. For good measure, run some tests: `go test -v`.
