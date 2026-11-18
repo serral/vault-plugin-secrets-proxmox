@@ -1,3 +1,5 @@
+version: 2
+
 before:
   hooks:
     - go mod tidy
@@ -14,7 +16,7 @@ builds:
       - amd64
 
 archives:
-  - format: binary
+  - formats: [binary]
     # this name template makes the OS and Arch compatible with the results of uname.
     name_template: >-
       {{ .ProjectName }}_
@@ -27,7 +29,7 @@ checksum:
   name_template: '{{ .ProjectName }}_v{{ .Version }}_SHA256SUMS'
   algorithm: sha256
 changelog:
-  skip: true
+  disable: true
 
 # The lines beneath this are called `modelines`. See `:help modeline`
 # Feel free to remove those if you don't want/use them.
