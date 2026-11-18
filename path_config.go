@@ -265,7 +265,7 @@ func getConfig(ctx context.Context, s logical.Storage) (*proxmoxConfig, error) {
 
 	config := new(proxmoxConfig)
 	if err := entry.DecodeJSON(&config); err != nil {
-		return nil, fmt.Errorf("error reading root configration: %w", err)
+		return nil, fmt.Errorf("error reading root configuration: %w", err)
 	}
 
 	return config, nil

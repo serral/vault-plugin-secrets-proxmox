@@ -24,7 +24,7 @@ func newClient(config *proxmoxConfig) (*proxmoxClient, error) {
 	fullToken := fmt.Sprintf("%s@%s!%s", config.User, config.Realm, config.ApiTokenID)
 
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: true, //nolint:gosec // explicit opt-in via the insecure_skip_tls_verify config field; nil config is used otherwise
 	}
 	if !config.SkipCertValidation {
 		tlsConfig = nil

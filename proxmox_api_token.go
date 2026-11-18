@@ -69,7 +69,7 @@ func (b *proxmoxBackend) tokenRevoke(ctx context.Context, req *logical.Request, 
 		return nil, errors.New("error retrieving role: role is nil")
 	}
 
-	if err := deleteToken(ctx, client, roleEntry.User, roleEntry.Realm, tokenID); err != nil {
+	if err := deleteToken(client, roleEntry.User, roleEntry.Realm, tokenID); err != nil {
 		return nil, fmt.Errorf("error revoking user token: %w", err)
 	}
 
@@ -127,7 +127,7 @@ func (b *proxmoxBackend) tokenRenew(ctx context.Context, req *logical.Request, d
 	return resp, nil
 }
 
-func createToken(ctx context.Context, c *proxmoxClient, user string, realm string, expire int64, privsep bool) (*proxmoxToken, error) {
+func createToken(c *proxmoxClient, user string, realm string, expire int64, privsep bool) (*proxmoxToken, error) {
 	if len(user) == 0 {
 		return nil, errors.New("error creating token: no user provided")
 	}
@@ -195,7 +195,7 @@ func updateTokenExpire(c *proxmoxClient, user string, realm string, tokenID stri
 	return u.UpdateApiToken(c.Client, pxapi.ApiToken{TokenId: tokenID, Comment: "Managed by Vault", Expire: expire, Privsep: privsep})
 }
 
-func deleteToken(ctx context.Context, c *proxmoxClient, user string, realm string, tokenID string) error {
+func deleteToken(c *proxmoxClient, user string, realm string, tokenID string) error {
 	u, err := pxapi.NewConfigUserFromApi(pxapi.UserID{Name: user, Realm: realm}, c.Client)
 	if err != nil {
 		return err

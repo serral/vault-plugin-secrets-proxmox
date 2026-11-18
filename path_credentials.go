@@ -20,9 +20,13 @@ func pathCredentials(b *proxmoxBackend) *framework.Path {
 				Required:    true,
 			},
 		},
-		Callbacks: map[logical.Operation]framework.OperationFunc{
-			logical.ReadOperation:   b.pathCredentialsRead,
-			logical.UpdateOperation: b.pathCredentialsRead,
+		Operations: map[logical.Operation]framework.OperationHandler{
+			logical.ReadOperation: &framework.PathOperation{
+				Callback: b.pathCredentialsRead,
+			},
+			logical.UpdateOperation: &framework.PathOperation{
+				Callback: b.pathCredentialsRead,
+			},
 		},
 		HelpSynopsis:    pathCredentialsHelpSyn,
 		HelpDescription: pathCredentialsHelpDesc,
@@ -42,7 +46,7 @@ func (b *proxmoxBackend) createToken(ctx context.Context, s logical.Storage, rol
 		expire = time.Now().Add(role.TTL).Unix()
 	}
 
-	token, err = createToken(ctx, client, role.User, role.Realm, expire, role.PrivilegeSeparation)
+	token, err = createToken(client, role.User, role.Realm, expire, role.PrivilegeSeparation)
 	if err != nil {
 		return nil, fmt.Errorf("error creating Proxmox API token for role '%v': %w", role.Name, err)
 	}
@@ -57,7 +61,7 @@ func (b *proxmoxBackend) createToken(ctx context.Context, s logical.Storage, rol
 	if role.PrivilegeSeparation {
 		tokenIDFull := fmt.Sprintf("%s@%s!%s", role.User, role.Realm, token.TokenID)
 		if err := grantTokenACL(client, tokenIDFull, role.ACLPath, role.ACLRoles, role.ACLPropagate); err != nil {
-			if delErr := deleteToken(ctx, client, role.User, role.Realm, token.TokenID); delErr != nil {
+			if delErr := deleteToken(client, role.User, role.Realm, token.TokenID); delErr != nil {
 				return nil, fmt.Errorf("error granting ACL to token for role '%v': %w (additionally, rollback failed to delete the token: %v)", role.Name, err, delErr)
 			}
 			return nil, fmt.Errorf("error granting ACL to token for role '%v': %w", role.Name, err)
