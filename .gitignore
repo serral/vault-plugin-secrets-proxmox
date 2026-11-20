@@ -48,3 +48,6 @@ vault/plugins
 !.vscode/launch.json
 # GoReleaser output
 dist/
+
+
+.vscode/
